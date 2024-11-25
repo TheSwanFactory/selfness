@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
-# sudo gem install rubyplot
+# sudo gem install gruff
 
-require 'rubyplot'
+require 'gruff'
 
 # Configuration constants
 CONFIG = {
@@ -23,6 +23,16 @@ module GridUtils
 
     def self.prune_empty_sites!(grid)
         grid.delete_if { |_coord, state| state.values_at(:mold, :food, :camp).all?(&:zero?) }
+    end
+
+    def self.expand_grid(grid)
+        new_cells = []
+        grid.each_key do |coord|
+            GridUtils.neighbors(coord).each do |neighbor|
+                new_cells << neighbor unless grid.key?(neighbor)
+            end
+        end
+        new_cells.each { |cell| grid[cell] = { mold: 0, food: 0, camp: 0, refractory: 0 } }
     end
 end
 
@@ -71,9 +81,9 @@ class CampBehavior < Behavior
         new_camp = Hash.new(0)
 
         grid.each do |coord, state|
-            camp = state[:camp] * (1 - CONFIG[:camp_decay])  # Apply decay
+            camp = state[:camp] * (1 - CONFIG[:camp_decay]) # Apply decay
             GridUtils.neighbors(coord).each do |neighbor|
-                new_camp[neighbor] += camp * 0.25  # Distribute equally to neighbors
+                new_camp[neighbor] += camp * 0.25 # Distribute equally to neighbors
             end
         end
 
@@ -113,6 +123,7 @@ class Simulation
 
     def step
         next_grid = Hash.new { |hash, key| hash[key] = { mold: 0, food: 0, camp: 0, refractory: 0 } }
+        GridUtils.expand_grid(@current_grid)
 
         # Apply each behavior in sequence
         behaviors.each { |behavior| behavior.apply(@current_grid, next_grid) }
@@ -155,13 +166,10 @@ class Simulation
     def plot(xs, ys, values, step)
         normalized_values = normalize_values(values)
 
-        Rubyplot::Scatter.new do |plot|
-            plot.data :Values, xs, ys, normalized_values
-            plot.title = "Step #{step}: Food, Mold, and Signal"
-            plot.x_label = 'X'
-            plot.y_label = 'Y'
-            plot.legend = true
-        end
+        g = Gruff::Scatter.new
+        g.title = "Step #{step}: Food, Mold, and Signal"
+        g.data :Values, xs, ys, normalized_values
+        g.write("step_#{step}.png")
     end
 
     def normalize_values(values)
@@ -171,7 +179,8 @@ class Simulation
 
     def initialize_grid
         grid = Hash.new { |hash, key| hash[key] = { mold: 0, food: 0, camp: 0, refractory: 0 } }
-        grid[[0, 0]] = { mold: CONFIG[:initial_cells], food: CONFIG[:food_capacity], camp: 0, refractory: 0 }
+        initial_site = { mold: CONFIG[:initial_cells], food: CONFIG[:food_capacity], camp: 0, refractory: 0 }
+        grid[[0, 0]] = initial_site
         grid
     end
 end
@@ -179,7 +188,7 @@ end
 # Main simulation loop
 def main
     simulation = Simulation.new
-    simulation.run(50)  # Run the simulation for 50 steps
+    simulation.run(50) # Run the simulation for 50 steps
     simulation.playback
 end
 
