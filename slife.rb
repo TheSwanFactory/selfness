@@ -60,6 +60,27 @@ class Behavior
     end
 end
 
+# MoldBehavior: Mold redistributes based on cAMP gradients
+class MoldBehavior < Behavior
+    protected
+
+    def process_site?(state)
+        state[:mold] > 0
+    end
+
+    def process_site(grid, next_grid, coord, state)
+        total_mold = state[:mold]
+        neighbors = ranked_neighbors(grid, coord)
+
+        # Distribute mold to neighbors proportionally to their cAMP levels
+        total_camp = neighbors.sum { |neighbor| grid[neighbor][:camp] }
+        neighbors.each do |neighbor|
+            weight = total_camp > 0 ? grid[neighbor][:camp] / total_camp : 1.0 / neighbors.size
+            next_grid[neighbor][:mold] += total_mold * weight
+        end
+    end
+end
+
 # FoodBehavior: Mold consumes nutrients and generates cAMP
 class FoodBehavior < Behavior
     protected
@@ -91,26 +112,6 @@ class CampBehavior < Behavior
     end
 end
 
-# MoldBehavior: Mold redistributes based on cAMP gradients
-class MoldBehavior < Behavior
-    protected
-
-    def process_site?(state)
-        state[:mold] > 0
-    end
-
-    def process_site(grid, next_grid, coord, state)
-        total_mold = state[:mold]
-        neighbors = ranked_neighbors(grid, coord)
-
-        # Distribute mold to neighbors proportionally to their cAMP levels
-        total_camp = neighbors.sum { |neighbor| grid[neighbor][:camp] }
-        neighbors.each do |neighbor|
-            weight = total_camp > 0 ? grid[neighbor][:camp] / total_camp : 1.0 / neighbors.size
-            next_grid[neighbor][:mold] += total_mold * weight
-        end
-    end
-end
 
 # Simulation class orchestrates the entire simulation lifecycle
 class Simulation
@@ -148,7 +149,7 @@ class Simulation
     private
 
     def behaviors
-        @behaviors ||= [FoodBehavior.new, CampBehavior.new, MoldBehavior.new]
+        @behaviors ||= [MoldBehavior.new, FoodBehavior.new, CampBehavior.new]
     end
 
     def visualize(grid, step)
@@ -157,7 +158,7 @@ class Simulation
         grid.each do |(x, y), state|
             xs << x
             ys << y
-            values << [state[:food], state[:mold], state[:camp]]
+            values << [state[:mold], state[:food], state[:camp]]
         end
 
         plot(xs, ys, values, step)
@@ -192,4 +193,6 @@ def main
     simulation.playback
 end
 
-main
+if __FILE__ == $0
+    main
+end
