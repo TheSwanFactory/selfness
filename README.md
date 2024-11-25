@@ -1,0 +1,2 @@
+# selfness
+Computational philosophy
